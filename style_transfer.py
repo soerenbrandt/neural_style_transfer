@@ -1,10 +1,31 @@
-""" """  # TODO add description
+"""Neural Style transfer is a cool application of convolutional neural networks
+that combines two images into one. Specifically, the style of one image is
+transfered to the content of the second image.
+
+Neural Style Transfer is based on [Gatys et al. (2015)](https://arxiv.org/abs/1508.06576).
+Two images are iteratively merged by transfering the style of one to the content
+of the other. The process is based on convolutional neural networks and uses a
+content cost and a style cost to transfer the visual style.
+
+This implementationn of neural style transfer in Tensorflow/Keras is based on
+the deeplearning.ai Coursera course on Convolutional Neural Networks and the
+Keras code example.
+
+I used a pre-trained VGG19 neural network ([Simonyan & Zisserman, 2014](https://arxiv.org/abs/1409.1556)).
+
+Example images to try style transfer and example generated images cam be found
+in the respective folders. I particularly like the mosaique which gives striking
+results after only around 40 iterations.
+
+Basic usage:
+
+    python3 style_transfer.py <content_image_path> <style_image_path>
+
+"""
 
 import argparse
 from pathlib import Path
-# fix OMP: Error #15: Initializing libiomp5.dylib, but found libiomp5.dylib already initialized.
 import os
-os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 import tensorflow as tf
 from tensorflow import keras
@@ -15,36 +36,18 @@ from neural_style_transfer.style_cost import compute_average_style_cost
 from neural_style_transfer.variation_cost import compute_variation_cost
 from neural_style_transfer.utils import preprocess_image, deprocess_image
 
-# define terminal inputs
-parser = argparse.ArgumentParser(description='Neural Style Transfer.')
-parser.add_argument('images',
-                    metavar='images',
-                    type=str,
-                    nargs='*',
-                    help='A set of two image file paths. '
-                    'First image is the content image. '
-                    'Second image is the style image')
-parser.add_argument('--out_dir',
-                    dest='out_dir',
-                    type=str,
-                    nargs=None,
-                    default='output_images',
-                    help='Output directory')
-parser.add_argument('--demo',
-                    dest='demo',
-                    action='store_const',
-                    const=True,
-                    default=False,
-                    help='Run a set of demo images. Ignores image paths.')
+# fix OMP: Error #15: Initializing libiomp5.dylib, but found libiomp5.dylib
+# already initialized.
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 DEMO_CONTENT_IMAGE = Path('example_images/amsterdam.jpg')
 DEMO_STYLE_IMAGE = Path('example_images/munch_the_scream.jpg')
 
 OUT_IMAGE_HEIGHT = 400
 
-ALPHA = 1e-6  # 0.025
-BETA = 1e-6  # 1
-GAMMA = 2.5e-8  # 1e-4
+ALPHA = 1e-6
+BETA = 1e-6
+GAMMA = 2.5e-8
 ITERATIONS = 140
 GENERATE_IMAGE_EVERY = 5
 
@@ -57,7 +60,19 @@ CONTENT_LAYER_NAME = "block5_conv2"
 
 
 def run_style_transfer(content_image_path, style_image_path, out_image_prefix):
-    # TODO description
+    """Run neural style transfer
+
+    Args:
+        content_image_path (str): content image file path
+        style_image_path (str): style image file path
+        out_image_prefix (str): prefix for generated images including output
+            folder. The image names will be:
+
+                <prefix>_at_iteration_<int>.png
+
+    Returns:
+        generated images as specified by out_image_prefix
+    """
     # Dimensions of the generated picture.
     width, height = keras.preprocessing.image.load_img(content_image_path).size
     image_size = (OUT_IMAGE_HEIGHT, int(width * OUT_IMAGE_HEIGHT / height))
@@ -105,6 +120,30 @@ def run_style_transfer(content_image_path, style_image_path, out_image_prefix):
 
 def compute_loss(feature_extractor, generated_image, content_image, style_image,
                  image_size):
+    """Computes the total loss for neural style transfer.
+
+    The total loss is a combination of the content cost, style cost, and the
+    variation cost:
+
+        total cost = ALPHA*content_cost + BETA*style_cost + GAMMA*variation_cost
+
+    ALPHA, BETA, and GAMMA are hyperparameters. The default values here are:
+
+        ALPHA = 1e-6
+        BETA = 1e-6
+        GAMMA = 2.5e-8
+
+    Args:
+        feature_extractor (keras.model): model that returns the activation
+            values for every layer. The model here is based on VGG19
+        generated_image (tf.tensor): generated image tensor
+        content_image (tf.tensor): content image tensor
+        style_image (tf.tensor): style image tensor
+        image_size (tuple(int,int)): height and width of the images
+
+    Returns:
+        total loss (float): combined content, style, and variation loss
+    """
     input_tensor = tf.concat([content_image, style_image, generated_image],
                              axis=0)
     features = feature_extractor(input_tensor)
@@ -134,6 +173,19 @@ def compute_loss(feature_extractor, generated_image, content_image, style_image,
 @tf.function
 def compute_loss_and_grads(feature_extractor, generated_image, content_image,
                            style_image, image_size):
+    """tf.function decorator to compile compute_loss.
+
+    Args:
+        feature_extractor (keras.model): model that returns the activation
+            values for every layer. The model here is based on VGG19
+        generated_image (tf.tensor): generated image tensor
+        content_image (tf.tensor): content image tensor
+        style_image (tf.tensor): style image tensor
+        image_size (tuple(int,int)): height and width of the images
+
+    Returns:
+        [type]: [description]
+    """
     with tf.GradientTape() as tape:
         loss = compute_loss(feature_extractor, generated_image, content_image,
                             style_image, image_size)
@@ -141,8 +193,39 @@ def compute_loss_and_grads(feature_extractor, generated_image, content_image,
     return loss, grads
 
 
+def run_argparser():
+    """Run argparser for terminal inputs
+
+    Returns:
+        parser (argparse.ArgumentParser): argument parser for style_transfer.py
+    """
+    # define terminal inputs
+    parser = argparse.ArgumentParser(description='Neural Style Transfer.')
+    parser.add_argument('images',
+                        metavar='images',
+                        type=str,
+                        nargs='*',
+                        help='A set of two image file paths. '
+                        'First image is the content image. '
+                        'Second image is the style image')
+    parser.add_argument('--out_dir',
+                        dest='out_dir',
+                        type=str,
+                        nargs=None,
+                        default='output_images',
+                        help='Output directory')
+    parser.add_argument('--demo',
+                        dest='demo',
+                        action='store_const',
+                        const=True,
+                        default=False,
+                        help='Run a set of demo images. Ignores image paths.')
+    return parser
+
+
 if __name__ == '__main__':
-    args = parser.parse_args()
+    argparser = run_argparser()
+    args = argparser.parse_args()
 
     # create output directory if not exists
     print(args.out_dir)
