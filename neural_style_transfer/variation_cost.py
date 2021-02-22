@@ -8,20 +8,16 @@ produce better results but is not absolutely needed.
 import tensorflow as tf
 
 
-def compute_variation_cost(image, height, width):
+def compute_variation_cost(image):
     """Compute the variation cost to keep the image cohesive.
 
     Args:
         image (tf.tensor): matrix of the generated image, shape (1, height, width, 3)
-        height (int): height of the image
-        width (int): width of the image
 
     Returns:
         cost (float)): variation cost of the image.
     """
-    a = tf.square(image[:, :height - 1, :width - 1, :] -
-                  image[:, 1:, :width - 1, :])
-    b = tf.square(image[:, :height - 1, :width - 1, :] -
-                  image[:, :height - 1, 1:, :])
+    vert = tf.square(image[:, :-1, :-1, :] - image[:, 1:, :-1, :])
+    horiz = tf.square(image[:, :-1, :-1, :] - image[:, :-1, 1:, :])
 
-    return tf.reduce_sum(tf.pow(a + b, 1.25))
+    return tf.reduce_sum(tf.pow(vert + horiz, 1.25))

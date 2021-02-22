@@ -37,7 +37,8 @@ from neural_style_transfer.variation_cost import compute_variation_cost
 from neural_style_transfer.utils import preprocess_image, deprocess_image
 
 # fix OMP: Error #15: Initializing libiomp5.dylib, but found libiomp5.dylib
-# already initialized.
+# already initialized. Note: This error occurs when calculating the gram matrix
+# using tf.matmul
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 DEMO_CONTENT_IMAGE = Path('example_images/amsterdam.jpg')
@@ -105,8 +106,7 @@ def run_style_transfer(content_image_path, style_image_path, out_image_prefix):
 
     for i in range(1, ITERATIONS + 1):
         loss, grads = compute_loss_and_grads(feature_extractor, generated_image,
-                                             content_image, style_image,
-                                             image_size)
+                                             content_image, style_image)
         optimizer.apply_gradients([(grads, generated_image)])
         if i % GENERATE_IMAGE_EVERY == 0:
             print("\rIteration %d: loss=%.0f" % (i, loss))
@@ -118,8 +118,8 @@ def run_style_transfer(content_image_path, style_image_path, out_image_prefix):
             print("\rIteration %d: loss=%.0f" % (i, loss), end='')
 
 
-def compute_loss(feature_extractor, generated_image, content_image, style_image,
-                 image_size):
+def compute_loss(feature_extractor, generated_image, content_image,
+                 style_image):
     """Computes the total loss for neural style transfer.
 
     The total loss is a combination of the content cost, style cost, and the
@@ -139,7 +139,6 @@ def compute_loss(feature_extractor, generated_image, content_image, style_image,
         generated_image (tf.tensor): generated image tensor
         content_image (tf.tensor): content image tensor
         style_image (tf.tensor): style image tensor
-        image_size (tuple(int,int)): height and width of the images
 
     Returns:
         total loss (float): combined content, style, and variation loss
@@ -162,8 +161,7 @@ def compute_loss(feature_extractor, generated_image, content_image, style_image,
     style_cost = compute_average_style_cost(features, STYLE_LAYER_NAMES)
 
     # Compute variational cost
-    variational_cost = compute_variation_cost(generated_image, image_size[0],
-                                              image_size[1])
+    variational_cost = compute_variation_cost(generated_image)
 
     # Return computed loss
     loss = ALPHA * content_cost + BETA * style_cost + GAMMA * variational_cost
@@ -172,7 +170,7 @@ def compute_loss(feature_extractor, generated_image, content_image, style_image,
 
 @tf.function
 def compute_loss_and_grads(feature_extractor, generated_image, content_image,
-                           style_image, image_size):
+                           style_image):
     """tf.function decorator to compile compute_loss.
 
     Args:
@@ -181,14 +179,13 @@ def compute_loss_and_grads(feature_extractor, generated_image, content_image,
         generated_image (tf.tensor): generated image tensor
         content_image (tf.tensor): content image tensor
         style_image (tf.tensor): style image tensor
-        image_size (tuple(int,int)): height and width of the images
 
     Returns:
         [type]: [description]
     """
     with tf.GradientTape() as tape:
         loss = compute_loss(feature_extractor, generated_image, content_image,
-                            style_image, image_size)
+                            style_image)
         grads = tape.gradient(loss, generated_image)
     return loss, grads
 
